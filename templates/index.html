@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus - Team Collaboration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-card glass-panel">
+            <div class="logo login-logo">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Nexus</span>
+            </div>
+            <h2>Welcome Back</h2>
+            <p>Enter your username to access your workspace.</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="usernameInput">Username</label>
+                    <input type="text" id="usernameInput" required placeholder="e.g., Alice">
+                </div>
+                <button type="submit" class="primary-btn login-btn">Enter Workspace</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="appScreen" style="display: none;">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>Nexus</span>
+                </div>
+            </div>
+            <ul class="nav-links" id="mainNav">
+                <li class="active"><a href="#" data-view="dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+                <li><a href="#" data-view="mytasks"><i class="fa-solid fa-list-check"></i> My Tasks</a></li>
+                <li><a href="#" data-view="team"><i class="fa-solid fa-users"></i> Team</a></li>
+                <li><a href="#" data-view="messages"><i class="fa-solid fa-message"></i> Messages</a></li>
+                <li><a href="#" data-view="settings"><i class="fa-solid fa-gear"></i> Settings</a></li>
+            </ul>
+            <div class="user-profile">
+                <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" alt="User Profile" class="avatar" id="sidebarAvatar">
+                <div class="user-info">
+                    <span class="name" id="sidebarName">Current User</span>
+                    <span class="role">Workspace Admin</span>
+                </div>
+                <button class="icon-btn logout-btn" id="logoutBtn" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="search-bar">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Search tasks, members...">
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+                    <button class="primary-btn" id="newTaskBtn"><i class="fa-solid fa-plus"></i> New Task</button>
+                </div>
+            </header>
+
+            <div id="view-dashboard" class="app-view active-view">
+                <div class="board-header">
+                    <div class="board-title-group">
+                        <select id="teamSelect" class="team-select">
+                            <option value="Product Design">Product Design</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Marketing">Marketing</option>
+                        </select>
+                        <span class="badge">Active Sprint</span>
+                    </div>
+                    <div class="team-members">
+                        <img src="https://ui-avatars.com/api/?name=Alice&background=ec4899&color=fff" alt="Alice" class="avatar avatar-sm">
+                        <img src="https://ui-avatars.com/api/?name=Bob&background=14b8a6&color=fff" alt="Bob" class="avatar avatar-sm">
+                        <img src="https://ui-avatars.com/api/?name=Charlie&background=f59e0b&color=fff" alt="Charlie" class="avatar avatar-sm">
+                        <div class="avatar avatar-sm more-members">+2</div>
+                    </div>
+                </div>
+
+                <!-- Kanban Board -->
+                <div class="kanban-board">
+                    <!-- To Do Column -->
+                    <div class="column" data-status="todo">
+                        <div class="column-header">
+                            <h2>To Do <span class="task-count" id="count-todo">0</span></h2>
+                            <button class="icon-btn"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <div class="task-list" id="todo-list">
+                            <!-- Tasks go here -->
+                        </div>
+                    </div>
+
+                    <!-- In Progress Column -->
+                    <div class="column" data-status="inprogress">
+                        <div class="column-header">
+                            <h2>In Progress <span class="task-count" id="count-inprogress">0</span></h2>
+                            <button class="icon-btn"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <div class="task-list" id="inprogress-list">
+                            <!-- Tasks go here -->
+                        </div>
+                    </div>
+
+                    <!-- Review Column -->
+                    <div class="column" data-status="review">
+                        <div class="column-header">
+                            <h2>Review <span class="task-count" id="count-review">0</span></h2>
+                            <button class="icon-btn"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <div class="task-list" id="review-list">
+                            <!-- Tasks go here -->
+                        </div>
+                    </div>
+
+                    <!-- Done Column -->
+                    <div class="column" data-status="done">
+                        <div class="column-header">
+                            <h2>Done <span class="task-count" id="count-done">0</span></h2>
+                            <button class="icon-btn"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <div class="task-list" id="done-list">
+                            <!-- Tasks go here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State Views for other tabs -->
+            <div id="view-mytasks" class="app-view empty-state">
+                <i class="fa-solid fa-list-check"></i>
+                <h2>My Tasks</h2>
+                <p>Track all tasks assigned specifically to you across all projects.</p>
+                <div class="badge coming-soon-badge">Coming Soon</div>
+            </div>
+
+            <div id="view-team" class="app-view empty-state">
+                <i class="fa-solid fa-users"></i>
+                <h2>Team Directory</h2>
+                <p>Manage team members, roles, and permissions.</p>
+                <div class="badge coming-soon-badge">Coming Soon</div>
+            </div>
+
+            <div id="view-messages" class="app-view empty-state">
+                <i class="fa-solid fa-message"></i>
+                <h2>Team Messages</h2>
+                <p>Collaborate in real-time with direct messages and channels.</p>
+                <div class="badge coming-soon-badge">Coming Soon</div>
+            </div>
+
+            <div id="view-settings" class="app-view empty-state">
+                <i class="fa-solid fa-gear"></i>
+                <h2>Settings</h2>
+                <p>Configure your workspace preferences and integrations.</p>
+                <div class="badge coming-soon-badge">Coming Soon</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Task Modal (Hidden by default) -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Create New Task</h2>
+                <button class="icon-btn close-btn" id="closeModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="taskForm">
+                <div class="form-group">
+                    <label for="taskTitle">Task Title</label>
+                    <input type="text" id="taskTitle" required placeholder="e.g., Design Landing Page">
+                </div>
+                <div class="form-group">
+                    <label for="taskDesc">Description</label>
+                    <textarea id="taskDesc" rows="4" placeholder="Add detailed description..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskAssignee">Assign To</label>
+                        <select id="taskAssignee">
+                            <option value="Alice">Alice</option>
+                            <option value="Bob">Bob</option>
+                            <option value="Charlie">Charlie</option>
+                            <option value="User">User</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-btn" id="cancelTaskBtn">Cancel</button>
+                    <button type="submit" class="primary-btn">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
