@@ -26,6 +26,8 @@ const chatInput = document.getElementById('chatInput');
 // State tracking
 let draggedTask = null;
 let currentTeam = 'Product Design';
+let currentChannel = 'general';
+
 
 // Initialize the board
 function initBoard() {
@@ -192,13 +194,19 @@ async function renderMessages() {
     if (!chatMessages) return;
     
     try {
-        const response = await fetch('/api/messages?channel=general');
+        const response = await fetch(`/api/messages?channel=${currentChannel}`);
         const messages = await response.json();
         
         chatMessages.innerHTML = '';
         
+        // Update header
+        const chatTitle = document.querySelector('.chat-title h3');
+        const chatDesc = document.querySelector('.chat-title p');
+        if (chatTitle) chatTitle.innerHTML = `<i class="fa-solid fa-hashtag"></i> ${currentChannel}`;
+        if (chatDesc) chatDesc.textContent = `Discussion for ${currentChannel}`;
+        
         if (messages.length === 0) {
-            chatMessages.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No messages yet. Start the conversation!</div>';
+            chatMessages.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No messages in #${currentChannel} yet.</div>`;
         }
         
         messages.forEach(msg => {
@@ -227,6 +235,27 @@ async function renderMessages() {
     }
 }
 
+// Channel Switching Logic
+function setupChannelListeners() {
+    const channels = document.querySelectorAll('.channel-list li');
+    channels.forEach(ch => {
+        ch.addEventListener('click', () => {
+            // Check if it's a channel (has hashtag) or DM (has image)
+            const icon = ch.querySelector('i');
+            if (icon && icon.classList.contains('fa-hashtag')) {
+                const newChannel = ch.textContent.trim();
+                currentChannel = newChannel;
+                
+                // Update UI active state
+                channels.forEach(c => c.classList.remove('active'));
+                ch.classList.add('active');
+                
+                renderMessages();
+            }
+        });
+    });
+}
+
 // Send Message
 if (chatForm) {
     chatForm.addEventListener('submit', async (e) => {
@@ -241,7 +270,7 @@ if (chatForm) {
                 body: JSON.stringify({
                     sender: currentUser,
                     content: content,
-                    channel: 'general'
+                    channel: currentChannel
                 })
             });
             chatInput.value = '';
@@ -548,6 +577,7 @@ function checkAuth() {
         sidebarAvatar.src = getAvatar(currentUser);
         renderTeamSelect();
         initBoard();
+        setupChannelListeners();
         
         // Start polling for messages if we're on the messages view
         startMessagePolling();
