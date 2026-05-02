@@ -409,26 +409,36 @@ kanbanBoard.addEventListener('change', (e) => {
     }
 });
 
+// Render teams authorized for the user
+function renderTeamSelect() {
+    if (!teamSelect) return;
+    
+    // Admins see all teams, members see only their teams
+    const userRole = localStorage.getItem('nexus_role');
+    const userTeams = JSON.parse(localStorage.getItem('nexus_user_teams')) || [];
+    
+    const allTeams = ['Product Design', 'Engineering', 'Marketing'];
+    const visibleTeams = userRole === 'admin' ? allTeams : userTeams;
+    
+    teamSelect.innerHTML = '';
+    visibleTeams.forEach(team => {
+        const option = document.createElement('option');
+        option.value = team;
+        option.textContent = team;
+        teamSelect.appendChild(option);
+    });
+    
+    if (visibleTeams.length > 0) {
+        currentTeam = visibleTeams[0];
+        teamSelect.value = currentTeam;
+    }
+}
+
 // Handle Team Change
 if (teamSelect) {
     teamSelect.addEventListener('change', async (e) => {
-        const targetTeam = e.target.value;
-        
-        // Check Access
-        try {
-            const res = await fetch(`/api/team-access?user=${currentUser}&team=${targetTeam}`);
-            const data = await res.json();
-            
-            if (data.access) {
-                currentTeam = targetTeam;
-                fetchTasks();
-            } else {
-                alert(`Access Denied: You are not a member of the ${targetTeam} team.`);
-                teamSelect.value = currentTeam; // Revert
-            }
-        } catch (err) {
-            console.error('Access check failed:', err);
-        }
+        currentTeam = e.target.value;
+        fetchTasks();
     });
 }
 
@@ -520,7 +530,6 @@ navLinks.forEach(link => {
     });
 });
 
-// Auth State Logic
 let currentUser = localStorage.getItem('nexus_user');
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -529,27 +538,67 @@ const sidebarName = document.getElementById('sidebarName');
 const sidebarAvatar = document.getElementById('sidebarAvatar');
 const logoutBtn = document.getElementById('logoutBtn');
 
+let messagePollInterval = null;
+
 function checkAuth() {
     if (currentUser) {
         loginScreen.style.display = 'none';
         appScreen.style.display = 'flex';
         sidebarName.textContent = currentUser;
         sidebarAvatar.src = getAvatar(currentUser);
+        renderTeamSelect();
         initBoard();
+        
+        // Start polling for messages if we're on the messages view
+        startMessagePolling();
     } else {
         loginScreen.style.display = 'flex';
         appScreen.style.display = 'none';
+        stopMessagePolling();
     }
 }
 
+function startMessagePolling() {
+    if (messagePollInterval) clearInterval(messagePollInterval);
+    messagePollInterval = setInterval(() => {
+        const activeView = document.querySelector('.app-view.active-view');
+        if (activeView && activeView.id === 'view-messages') {
+            renderMessages();
+        }
+    }, 3000); // Poll every 3s
+}
+
+function stopMessagePolling() {
+    if (messagePollInterval) clearInterval(messagePollInterval);
+    messagePollInterval = null;
+}
+
 if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('usernameInput').value.trim();
         if (username) {
-            currentUser = username;
-            localStorage.setItem('nexus_user', currentUser);
-            checkAuth();
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    currentUser = data.username;
+                    localStorage.setItem('nexus_user', currentUser);
+                    localStorage.setItem('nexus_role', data.role);
+                    localStorage.setItem('nexus_user_teams', JSON.stringify(data.teams));
+                    checkAuth();
+                } else {
+                    alert(data.message);
+                }
+            } catch (err) {
+                console.error('Login failed:', err);
+                alert('Connection error. Is the server running?');
+            }
         }
     });
 }

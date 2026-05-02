@@ -50,15 +50,19 @@ class Message(db.Model):
 def index():
     return render_template('index.html')
 
-@app.route('/api/init', methods=['POST'])
-def init_db():
-    db.create_all()
-    # Create default teams if they don't exist
-    for team_name in ['Product Design', 'Engineering', 'Marketing']:
-        if not Team.query.filter_by(name=team_name).first():
-            db.session.add(Team(name=team_name))
-    db.session.commit()
-    return jsonify({"message": "Database initialized"}), 200
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    user = User.query.filter_by(username=username).first()
+    if user:
+        return jsonify({
+            "success": True,
+            "username": user.username,
+            "role": user.role,
+            "teams": [t.name for t in user.teams]
+        }), 200
+    return jsonify({"success": False, "message": "User not found in database."}), 401
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
@@ -183,17 +187,37 @@ def add_member():
     return jsonify({"message": "User already in team or team not found"}), 400
 
 if __name__ == '__main__':
-    # Initialize DB on start for simplicity in this demo
     with app.app_context():
         db.create_all()
-        # Seed default teams
-        for tn in ['Product Design', 'Engineering', 'Marketing']:
-            if not Team.query.filter_by(name=tn).first():
-                db.session.add(Team(name=tn))
-        # Make first user an admin for demo
-        first_user = User.query.first()
-        if first_user:
-            first_user.role = 'admin'
+        
+        # Seed Teams
+        teams = {}
+        for name in ['Product Design', 'Engineering', 'Marketing']:
+            team = Team.query.filter_by(name=name).first()
+            if not team:
+                team = Team(name=name)
+                db.session.add(team)
+            teams[name] = team
+        
+        # Seed Users
+        example_users = [
+            {'username': 'Alice', 'role': 'admin', 'teams': ['Product Design', 'Engineering']},
+            {'username': 'Bob', 'role': 'member', 'teams': ['Product Design']},
+            {'username': 'Charlie', 'role': 'member', 'teams': ['Engineering']},
+            {'username': 'Admin', 'role': 'admin', 'teams': ['Marketing']}
+        ]
+        
+        for u_data in example_users:
+            user = User.query.filter_by(username=u_data['username']).first()
+            if not user:
+                user = User(username=u_data['username'], role=u_data['role'])
+                db.session.add(user)
+                db.session.flush() # Get ID
+            
+            # Update teams
+            user.teams = [teams[t_name] for t_name in u_data['teams'] if t_name in teams]
+            
         db.session.commit()
+        print("Database seeded with example users and teams.")
         
     app.run(debug=True, port=8080, host='0.0.0.0')
