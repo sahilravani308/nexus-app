@@ -79,10 +79,12 @@
                         <span class="badge">Active Sprint</span>
                     </div>
                     <div class="team-members">
-                        <img src="https://ui-avatars.com/api/?name=Alice&background=ec4899&color=fff" alt="Alice" class="avatar avatar-sm">
-                        <img src="https://ui-avatars.com/api/?name=Bob&background=14b8a6&color=fff" alt="Bob" class="avatar avatar-sm">
-                        <img src="https://ui-avatars.com/api/?name=Charlie&background=f59e0b&color=fff" alt="Charlie" class="avatar avatar-sm">
-                        <div class="avatar avatar-sm more-members">+2</div>
+                        <div id="teamRoster" style="display: flex; align-items: center; margin-right: 12px;">
+                            <img src="https://ui-avatars.com/api/?name=Alice&background=ec4899&color=fff" alt="Alice" class="avatar avatar-sm">
+                            <img src="https://ui-avatars.com/api/?name=Bob&background=14b8a6&color=fff" alt="Bob" class="avatar avatar-sm">
+                            <img src="https://ui-avatars.com/api/?name=Charlie&background=f59e0b&color=fff" alt="Charlie" class="avatar avatar-sm">
+                        </div>
+                        <button class="icon-btn" id="manageTeamBtn" title="Manage Team Members"><i class="fa-solid fa-user-plus"></i></button>
                     </div>
                 </div>
 
@@ -135,18 +137,41 @@
             </div>
 
             <!-- Empty State Views for other tabs -->
-            <div id="view-mytasks" class="app-view empty-state">
-                <i class="fa-solid fa-list-check"></i>
-                <h2>My Tasks</h2>
-                <p>Track all tasks assigned specifically to you across all projects.</p>
-                <div class="badge coming-soon-badge">Coming Soon</div>
+            <div id="view-mytasks" class="app-view">
+                <div class="board-header">
+                    <h2>My Tasks</h2>
+                    <p>Tasks specifically assigned to you across all projects.</p>
+                </div>
+                <div class="mytasks-container">
+                    <div class="task-list-header">
+                        <span>Task</span>
+                        <span>Project</span>
+                        <span>Priority</span>
+                        <span>Due Date</span>
+                        <span>Status</span>
+                    </div>
+                    <div id="mytasks-list" class="mytasks-list">
+                        <!-- My tasks go here -->
+                    </div>
+                </div>
             </div>
 
-            <div id="view-team" class="app-view empty-state">
-                <i class="fa-solid fa-users"></i>
-                <h2>Team Directory</h2>
-                <p>Manage team members, roles, and permissions.</p>
-                <div class="badge coming-soon-badge">Coming Soon</div>
+            <div id="view-team" class="app-view">
+                <div class="board-header">
+                    <h2>Team Directory</h2>
+                    <p>Manage team members, roles, and permissions across the workspace.</p>
+                </div>
+                <div class="mytasks-container">
+                    <div class="task-list-header" style="grid-template-columns: 2fr 1fr 2fr 1fr;">
+                        <span>Member</span>
+                        <span>Role</span>
+                        <span>Teams</span>
+                        <span>Status</span>
+                    </div>
+                    <div id="team-directory-list" class="mytasks-list">
+                        <!-- Team members go here -->
+                    </div>
+                </div>
             </div>
 
             <div id="view-messages" class="app-view empty-state">
@@ -205,6 +230,31 @@
                     <button type="submit" class="primary-btn">Create Task</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Team Management Modal -->
+    <div class="modal-overlay" id="teamModal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Manage Team Members</h2>
+                <button class="icon-btn close-btn" id="closeTeamModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="teamMemberForm">
+                <div class="form-group">
+                    <label for="newMemberName">Add Username to Team</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="newMemberName" required placeholder="e.g., Alice">
+                        <button type="submit" class="primary-btn">Add</button>
+                    </div>
+                </div>
+            </form>
+            <div id="currentTeamList" style="margin-top: 20px;">
+                <label>Current Members</label>
+                <div id="memberListItems" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                    <!-- Members listed here -->
+                </div>
+            </div>
         </div>
     </div>
 

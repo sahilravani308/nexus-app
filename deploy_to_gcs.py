@@ -45,7 +45,7 @@ def build_zip(source_dir: Path, zip_path: Path) -> None:
                 print(f"  added: {arc_name}")
 
     size_kb = zip_path.stat().st_size / 1024
-    print(f"\n✅ Archive created: {zip_path}  ({size_kb:.1f} KB)")
+    print(f"\nArchive created: {zip_path}  ({size_kb:.1f} KB)")
 
 
 def upload_to_gcs(bucket_name: str, zip_path: Path, blob_name: str) -> str:
@@ -60,9 +60,9 @@ def upload_to_gcs(bucket_name: str, zip_path: Path, blob_name: str) -> str:
     bucket = client.bucket(bucket_name)
     blob   = bucket.blob(blob_name)
 
-    print(f"\n⬆  Uploading to gs://{bucket_name}/{blob_name} …")
+    print(f"\nUploading to gs://{bucket_name}/{blob_name} ...")
     blob.upload_from_filename(str(zip_path))
-    print(f"✅ Upload complete:  gs://{bucket_name}/{blob_name}")
+    print(f"Upload complete:  gs://{bucket_name}/{blob_name}")
 
     return f"gs://{bucket_name}/{blob_name}"
 
@@ -73,9 +73,9 @@ def print_deploy_commands(project: str, bucket: str, blob: str) -> None:
     region       = "us-central1"
     image        = f"gcr.io/{project}/{service_name}"
 
-    print("\n" + "═" * 60)
-    print("🚀  CLOUD RUN DEPLOYMENT COMMANDS")
-    print("═" * 60)
+    print("\n" + "=" * 60)
+    print("  CLOUD RUN DEPLOYMENT COMMANDS")
+    print("=" * 60)
     print("\nStep 1 – Authenticate with GCP (if not already):")
     print("   gcloud auth login")
     print(f"   gcloud config set project {project}")
@@ -102,7 +102,7 @@ def print_deploy_commands(project: str, bucket: str, blob: str) -> None:
         f"     --allow-unauthenticated \\\n"
         f"     --port 8080"
     )
-    print("\n" + "═" * 60)
+    print("\n" + "=" * 60)
 
 
 def main():
@@ -119,7 +119,7 @@ def main():
     zip_path   = source_dir / zip_name
     blob_name  = f"nexus-app/{zip_name}"
 
-    print(f"📦  Building archive from: {source_dir}")
+    print(f"Building archive from: {source_dir}")
     build_zip(source_dir, zip_path)
 
     if not args.no_upload:

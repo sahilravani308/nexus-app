@@ -1,36 +1,6 @@
 // Initial State
-let tasks = JSON.parse(localStorage.getItem('nexus_tasks')) || [
-    {
-        id: 'task-1',
-        title: 'Design System Architecture',
-        description: 'Create the core design tokens, color palette, and typography system.',
-        priority: 'high',
-        assignee: 'Alice',
-        status: 'todo',
-        team: 'Product Design',
-        date: new Date().toLocaleDateString()
-    },
-    {
-        id: 'task-2',
-        title: 'User Authentication Flow',
-        description: 'Design the login, signup, and password recovery screens.',
-        priority: 'medium',
-        assignee: 'Bob',
-        status: 'inprogress',
-        team: 'Product Design',
-        date: new Date().toLocaleDateString()
-    },
-    {
-        id: 'task-3',
-        title: 'Dashboard Wireframes',
-        description: 'Initial sketches and low-fidelity wireframes for the main dashboard.',
-        priority: 'low',
-        assignee: 'Charlie',
-        status: 'done',
-        team: 'Product Design',
-        date: new Date().toLocaleDateString()
-    }
-];
+let tasks = [];
+
 
 // DOM Elements
 const kanbanBoard = document.querySelector('.kanban-board');
@@ -41,6 +11,13 @@ const closeModalBtn = document.getElementById('closeModalBtn');
 const cancelTaskBtn = document.getElementById('cancelTaskBtn');
 const taskForm = document.getElementById('taskForm');
 const teamSelect = document.getElementById('teamSelect');
+const manageTeamBtn = document.getElementById('manageTeamBtn');
+const teamModal = document.getElementById('teamModal');
+const closeTeamModalBtn = document.getElementById('closeTeamModalBtn');
+const teamMemberForm = document.getElementById('teamMemberForm');
+const memberListItems = document.getElementById('memberListItems');
+const teamRoster = document.getElementById('teamRoster');
+
 
 // State tracking
 let draggedTask = null;
@@ -48,15 +25,34 @@ let currentTeam = 'Product Design';
 
 // Initialize the board
 function initBoard() {
-    renderTasks();
-    updateCounts();
+    fetchTasks();
     setupDragAndDrop();
 }
 
-// Save to LocalStorage
-function saveTasks() {
-    localStorage.setItem('nexus_tasks', JSON.stringify(tasks));
-    updateCounts();
+// Fetch from API
+async function fetchTasks() {
+    try {
+        const response = await fetch(`/api/tasks?team=${currentTeam}`);
+        tasks = await response.json();
+        renderTasks();
+        updateCounts();
+    } catch (err) {
+        console.error('Failed to fetch tasks:', err);
+    }
+}
+
+// Save to Backend (Create only for now)
+async function saveTaskToBackend(task) {
+    try {
+        await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(task)
+        });
+        fetchTasks();
+    } catch (err) {
+        console.error('Failed to save task:', err);
+    }
 }
 
 // Generate Avatar URL based on name
@@ -120,6 +116,71 @@ function renderTasks() {
             columnEl.appendChild(createTaskElement(task));
         }
     });
+}
+
+// Render "My Tasks" view
+function renderMyTasks() {
+    const listContainer = document.getElementById('mytasks-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '';
+    
+    const myTasks = tasks.filter(t => t.assignee === currentUser);
+    
+    if (myTasks.length === 0) {
+        listContainer.innerHTML = '<div class="mytask-row"><span style="color: var(--text-muted)">No tasks assigned to you.</span></div>';
+        return;
+    }
+    
+    myTasks.forEach(task => {
+        const row = document.createElement('div');
+        row.classList.add('mytask-row');
+        row.innerHTML = `
+            <span class="mytask-name">${task.title}</span>
+            <span class="mytask-project">${task.team || 'Personal'}</span>
+            <span class="tag ${task.priority}">${task.priority}</span>
+            <span style="font-size: 13px; color: var(--text-muted)">${task.date}</span>
+            <span><span class="mytask-status status-${task.status}">${task.status}</span></span>
+        `;
+        listContainer.appendChild(row);
+    });
+}
+
+// Render "Team Directory" view
+async function renderTeamDirectory() {
+    const listContainer = document.getElementById('team-directory-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '<div class="mytask-row"><span style="color: var(--text-muted)">Loading directory...</span></div>';
+    
+    try {
+        const response = await fetch('/api/users');
+        const users = await response.json();
+        
+        listContainer.innerHTML = '';
+        
+        users.forEach(user => {
+            const row = document.createElement('div');
+            row.classList.add('mytask-row');
+            row.style.gridTemplateColumns = '2fr 1fr 2fr 1fr';
+            
+            const teamBadges = user.teams.map(t => `<span class="badge" style="font-size: 10px; margin-right: 5px;">${t}</span>`).join('');
+            
+            row.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img src="${getAvatar(user.username)}" class="avatar avatar-sm">
+                    <span class="mytask-name">${user.username}</span>
+                </div>
+                <span style="text-transform: capitalize;">${user.role}</span>
+                <div>${teamBadges || '<span style="color: var(--text-muted)">No teams</span>'}</div>
+                <span><span class="mytask-status status-done">Active</span></span>
+            `;
+            listContainer.appendChild(row);
+        });
+    } catch (err) {
+        console.error('Failed to fetch users:', err);
+        listContainer.innerHTML = '<div class="mytask-row"><span style="color: var(--accent-danger)">Error loading directory.</span></div>';
+    }
 }
 
 // Update task counters
@@ -244,19 +305,15 @@ taskForm.addEventListener('submit', (e) => {
     if (!title) return;
     
     const newTask = {
-        id: `task-${Date.now()}`,
         title,
         description,
         priority,
         assignee,
-        status: 'todo', // Default status
-        team: currentTeam,
-        date: new Date().toLocaleDateString()
+        status: 'todo',
+        team: currentTeam
     };
     
-    tasks.push(newTask);
-    saveTasks();
-    renderTasks();
+    saveTaskToBackend(newTask);
     closeModal();
 });
 
@@ -276,10 +333,72 @@ kanbanBoard.addEventListener('change', (e) => {
 
 // Handle Team Change
 if (teamSelect) {
-    teamSelect.addEventListener('change', (e) => {
-        currentTeam = e.target.value;
-        renderTasks();
-        updateCounts();
+    teamSelect.addEventListener('change', async (e) => {
+        const targetTeam = e.target.value;
+        
+        // Check Access
+        try {
+            const res = await fetch(`/api/team-access?user=${currentUser}&team=${targetTeam}`);
+            const data = await res.json();
+            
+            if (data.access) {
+                currentTeam = targetTeam;
+                fetchTasks();
+            } else {
+                alert(`Access Denied: You are not a member of the ${targetTeam} team.`);
+                teamSelect.value = currentTeam; // Revert
+            }
+        } catch (err) {
+            console.error('Access check failed:', err);
+        }
+    });
+}
+
+// Team Management Logic
+function openTeamModal() {
+    teamModal.classList.add('active');
+    updateMemberList();
+}
+
+function closeTeamModal() {
+    teamModal.classList.remove('active');
+}
+
+async function updateMemberList() {
+    if (!memberListItems) return;
+    memberListItems.innerHTML = '<div style="color: var(--text-muted)">Loading...</div>';
+    
+    // In a real app, you'd fetch the team roster
+    // For now, we'll just show a placeholder or fetch if we had the endpoint
+    memberListItems.innerHTML = '<div style="color: var(--text-muted)">Members managed on server.</div>';
+}
+
+if (manageTeamBtn) manageTeamBtn.addEventListener('click', openTeamModal);
+if (closeTeamModalBtn) closeTeamModalBtn.addEventListener('click', closeTeamModal);
+
+if (teamMemberForm) {
+    teamMemberForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('newMemberName').value.trim();
+        if (!username) return;
+        
+        try {
+            const res = await fetch('/api/teams/add-member', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin: currentUser,
+                    username: username,
+                    team: currentTeam
+                })
+            });
+            const data = await res.json();
+            alert(data.message);
+            document.getElementById('newMemberName').value = '';
+            updateMemberList();
+        } catch (err) {
+            console.error('Failed to add member:', err);
+        }
     });
 }
 
@@ -291,12 +410,14 @@ navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         
+        const viewName = e.currentTarget.dataset.view;
+        
         // Update active class on nav links
         document.querySelectorAll('#mainNav li').forEach(li => li.classList.remove('active'));
         e.currentTarget.parentElement.classList.add('active');
         
         // Show corresponding view
-        const targetViewId = `view-${e.currentTarget.dataset.view}`;
+        const targetViewId = `view-${viewName}`;
         appViews.forEach(view => {
             if (view.id === targetViewId) {
                 view.classList.add('active-view');
@@ -304,6 +425,16 @@ navLinks.forEach(link => {
                 view.classList.remove('active-view');
             }
         });
+
+        // Trigger view-specific rendering
+        if (viewName === 'dashboard') {
+            renderTasks();
+            updateCounts();
+        } else if (viewName === 'mytasks') {
+            renderMyTasks();
+        } else if (viewName === 'team') {
+            renderTeamDirectory();
+        }
     });
 });
 
