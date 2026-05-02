@@ -36,6 +36,14 @@ class Task(db.Model):
     team_name = db.Column(db.String(80))
     date = db.Column(db.String(20))
 
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender = db.Column(db.String(80), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    channel = db.Column(db.String(80), default='general')
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # ── API Endpoints ───────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -61,6 +69,28 @@ def get_users():
         "role": u.role,
         "teams": [t.name for t in u.teams]
     } for u in users])
+
+@app.route('/api/messages', methods=['GET'])
+def get_messages():
+    channel = request.args.get('channel', 'general')
+    messages = Message.query.filter_by(channel=channel).order_by(Message.timestamp.asc()).all()
+    return jsonify([{
+        "sender": m.sender,
+        "content": m.content,
+        "timestamp": m.timestamp.strftime("%H:%M")
+    } for m in messages])
+
+@app.route('/api/messages', methods=['POST'])
+def send_message():
+    data = request.json
+    new_msg = Message(
+        sender=data.get('sender'),
+        content=data.get('content'),
+        channel=data.get('channel', 'general')
+    )
+    db.session.add(new_msg)
+    db.session.commit()
+    return jsonify({"message": "Message sent"}), 201
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():

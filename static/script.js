@@ -17,6 +17,10 @@ const closeTeamModalBtn = document.getElementById('closeTeamModalBtn');
 const teamMemberForm = document.getElementById('teamMemberForm');
 const memberListItems = document.getElementById('memberListItems');
 const teamRoster = document.getElementById('teamRoster');
+const chatMessages = document.getElementById('chat-messages');
+const chatForm = document.getElementById('chatForm');
+const chatInput = document.getElementById('chatInput');
+
 
 
 // State tracking
@@ -181,6 +185,80 @@ async function renderTeamDirectory() {
         console.error('Failed to fetch users:', err);
         listContainer.innerHTML = '<div class="mytask-row"><span style="color: var(--accent-danger)">Error loading directory.</span></div>';
     }
+}
+
+// Render "Messages" view
+async function renderMessages() {
+    if (!chatMessages) return;
+    
+    try {
+        const response = await fetch('/api/messages?channel=general');
+        const messages = await response.json();
+        
+        chatMessages.innerHTML = '';
+        
+        if (messages.length === 0) {
+            chatMessages.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No messages yet. Start the conversation!</div>';
+        }
+        
+        messages.forEach(msg => {
+            const isMe = msg.sender === currentUser;
+            const msgEl = document.createElement('div');
+            msgEl.classList.add('message-item');
+            if (isMe) msgEl.classList.add('me');
+            
+            msgEl.innerHTML = `
+                <img src="${getAvatar(msg.sender)}" class="avatar avatar-sm">
+                <div class="message-content">
+                    <div class="message-info">
+                        <strong>${msg.sender}</strong>
+                        <span>${msg.timestamp}</span>
+                    </div>
+                    <p>${msg.content}</p>
+                </div>
+            `;
+            chatMessages.appendChild(msgEl);
+        });
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    } catch (err) {
+        console.error('Failed to fetch messages:', err);
+    }
+}
+
+// Send Message
+if (chatForm) {
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const content = chatInput.value.trim();
+        if (!content) return;
+        
+        try {
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sender: currentUser,
+                    content: content,
+                    channel: 'general'
+                })
+            });
+            chatInput.value = '';
+            renderMessages();
+        } catch (err) {
+            console.error('Failed to send message:', err);
+        }
+    });
+}
+
+// Render "Settings" view
+function renderSettings() {
+    const settingsUsername = document.getElementById('settingsUsername');
+    const settingsAvatar = document.getElementById('settingsAvatar');
+    
+    if (settingsUsername) settingsUsername.value = currentUser;
+    if (settingsAvatar) settingsAvatar.src = getAvatar(currentUser);
 }
 
 // Update task counters
@@ -434,6 +512,10 @@ navLinks.forEach(link => {
             renderMyTasks();
         } else if (viewName === 'team') {
             renderTeamDirectory();
+        } else if (viewName === 'messages') {
+            renderMessages();
+        } else if (viewName === 'settings') {
+            renderSettings();
         }
     });
 });

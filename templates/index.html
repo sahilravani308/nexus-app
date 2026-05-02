@@ -174,18 +174,87 @@
                 </div>
             </div>
 
-            <div id="view-messages" class="app-view empty-state">
-                <i class="fa-solid fa-message"></i>
-                <h2>Team Messages</h2>
-                <p>Collaborate in real-time with direct messages and channels.</p>
-                <div class="badge coming-soon-badge">Coming Soon</div>
+            <div id="view-messages" class="app-view">
+                <div class="messages-container">
+                    <aside class="messages-sidebar">
+                        <div class="messages-sidebar-header">
+                            <h3>Channels</h3>
+                            <button class="icon-btn"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                        <ul class="channel-list">
+                            <li class="active"><i class="fa-solid fa-hashtag"></i> general</li>
+                            <li><i class="fa-solid fa-hashtag"></i> product-design</li>
+                            <li><i class="fa-solid fa-hashtag"></i> engineering</li>
+                        </ul>
+                        <div class="messages-sidebar-header" style="margin-top: 24px;">
+                            <h3>Direct Messages</h3>
+                        </div>
+                        <ul class="channel-list">
+                            <li><img src="https://ui-avatars.com/api/?name=Alice&background=ec4899&color=fff" class="avatar avatar-sm"> Alice</li>
+                            <li><img src="https://ui-avatars.com/api/?name=Bob&background=14b8a6&color=fff" class="avatar avatar-sm"> Bob</li>
+                        </ul>
+                    </aside>
+                    <div class="chat-area">
+                        <div class="chat-header">
+                            <div class="chat-title">
+                                <h3><i class="fa-solid fa-hashtag"></i> general</h3>
+                                <p>Team-wide announcements and general discussion</p>
+                            </div>
+                        </div>
+                        <div id="chat-messages" class="chat-messages">
+                            <!-- Messages go here -->
+                        </div>
+                        <div class="chat-input-container">
+                            <form id="chatForm">
+                                <input type="text" id="chatInput" placeholder="Type a message to #general..." required>
+                                <button type="submit" class="primary-btn"><i class="fa-solid fa-paper-plane"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div id="view-settings" class="app-view empty-state">
-                <i class="fa-solid fa-gear"></i>
-                <h2>Settings</h2>
-                <p>Configure your workspace preferences and integrations.</p>
-                <div class="badge coming-soon-badge">Coming Soon</div>
+            <div id="view-settings" class="app-view">
+                <div class="board-header">
+                    <h2>Settings</h2>
+                    <p>Configure your personal profile and workspace preferences.</p>
+                </div>
+                <div class="settings-container" style="padding: 0 40px;">
+                    <div class="glass-panel" style="padding: 32px; max-width: 800px;">
+                        <section class="settings-section">
+                            <h3><i class="fa-solid fa-user"></i> Profile Information</h3>
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label>Profile Picture</label>
+                                <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px;">
+                                    <img src="" class="avatar" id="settingsAvatar" style="width: 80px; height: 80px;">
+                                    <button class="secondary-btn">Change Avatar</button>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label>Username</label>
+                                <input type="text" id="settingsUsername" readonly style="background: rgba(255,255,255,0.05);">
+                            </div>
+                        </section>
+                        <hr style="margin: 32px 0; border: none; border-top: 1px solid var(--border-color);">
+                        <section class="settings-section">
+                            <h3><i class="fa-solid fa-bell"></i> Notifications</h3>
+                            <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                    <input type="checkbox" checked> Email notifications for new tasks
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                    <input type="checkbox" checked> Desktop alerts for mentions
+                                </label>
+                            </div>
+                        </section>
+                        <hr style="margin: 32px 0; border: none; border-top: 1px solid var(--border-color);">
+                        <section class="settings-section">
+                            <h3 style="color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</h3>
+                            <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">Irreversible actions for your account and workspace.</p>
+                            <button class="primary-btn" style="background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); margin-top: 20px;">Delete Account</button>
+                        </section>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
