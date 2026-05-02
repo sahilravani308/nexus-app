@@ -154,6 +154,26 @@ def update_user():
     return jsonify({"message": f"Updated user {target_username}"}), 200
 
 
+@app.route('/api/tasks/update', methods=['POST'])
+def update_task_status():
+    data = request.json
+    task_id_str = data.get('id') # e.g., "task-5"
+    new_status = data.get('status')
+    
+    if not task_id_str or not new_status:
+        return jsonify({"message": "Invalid data"}), 400
+        
+    try:
+        task_id = int(task_id_str.split('-')[1])
+        task = Task.query.get(task_id)
+        if task:
+            task.status = new_status
+            db.session.commit()
+            return jsonify({"message": "Task updated"}), 200
+        return jsonify({"message": "Task not found"}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
     team_name = request.args.get('team')

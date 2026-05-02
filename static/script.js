@@ -54,7 +54,23 @@ async function fetchTasks() {
     }
 }
 
-// Save to Backend (Create only for now)
+// Save to Backend (Update status)
+async function updateTaskOnBackend(taskId, status) {
+    try {
+        await fetch('/api/tasks/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: taskId, status: status })
+        });
+        // We don't necessarily need to re-fetch everything if the drag was successful
+        // but it ensures the global 'tasks' array stays in sync.
+        const response = await fetch(`/api/tasks?team=${currentTeam}`);
+        tasks = await response.json();
+    } catch (err) {
+        console.error('Failed to update task:', err);
+    }
+}
+
 async function saveTaskToBackend(task) {
     try {
         await fetch('/api/tasks', {
@@ -67,6 +83,8 @@ async function saveTaskToBackend(task) {
         console.error('Failed to save task:', err);
     }
 }
+
+
 
 // Generate Avatar URL based on name
 function getAvatar(name) {
@@ -455,11 +473,7 @@ function handleDrop(e) {
         const taskId = draggedTask.dataset.id;
         const newStatus = this.parentElement.dataset.status;
         
-        const taskIndex = tasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-            tasks[taskIndex].status = newStatus;
-            saveTasks();
-        }
+        updateTaskOnBackend(taskId, newStatus);
     }
 }
 
