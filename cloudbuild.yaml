@@ -24,6 +24,10 @@ steps:
       - '--allow-unauthenticated'
       - '--port'
       - '8080'
+      - '--set-secrets'
+      - 'GEMINI_API_KEY=GEMINI_API_KEY:latest'
+      - '--set-env-vars'
+      - 'BQ_DATASET=nexus_audit,GCS_BUCKET=$PROJECT_ID-attachments'
 
 images:
   - 'gcr.io/$PROJECT_ID/nexus-app:$COMMIT_SHA'

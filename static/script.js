@@ -847,7 +847,72 @@ if (loginForm) {
     });
 }
 
+// AI Assistant Logic
+const aiFab = document.getElementById('aiFab');
+const aiWidget = document.getElementById('aiWidget');
+const closeAiBtn = document.getElementById('closeAiBtn');
+const sendAiBtn = document.getElementById('sendAiBtn');
+const aiInput = document.getElementById('aiInput');
+const aiChatBox = document.getElementById('aiChatBox');
+
+if (aiFab) {
+    aiFab.addEventListener('click', () => {
+        aiWidget.classList.toggle('active');
+    });
+}
+
+if (closeAiBtn) {
+    closeAiBtn.addEventListener('click', () => {
+        aiWidget.classList.remove('active');
+    });
+}
+
+async function sendAiMessage() {
+    const msg = aiInput.value.trim();
+    if (!msg) return;
+
+    // Append user message
+    const userDiv = document.createElement('div');
+    userDiv.className = 'ai-msg user';
+    userDiv.textContent = msg;
+    aiChatBox.appendChild(userDiv);
+    aiInput.value = '';
+    aiChatBox.scrollTop = aiChatBox.scrollHeight;
+
+    // Loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'ai-msg bot';
+    loadingDiv.innerHTML = '<i class="fa-solid fa-ellipsis fa-fade"></i> Thinking...';
+    aiChatBox.appendChild(loadingDiv);
+
+    try {
+        const res = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, username: currentUser })
+        });
+        const data = await res.json();
+        
+        loadingDiv.remove();
+        const botDiv = document.createElement('div');
+        botDiv.className = 'ai-msg bot';
+        botDiv.textContent = data.response || data.message;
+        aiChatBox.appendChild(botDiv);
+        aiChatBox.scrollTop = aiChatBox.scrollHeight;
+    } catch (err) {
+        loadingDiv.textContent = "Sorry, I'm offline right now.";
+    }
+}
+
+if (sendAiBtn) sendAiBtn.addEventListener('click', sendAiMessage);
+if (aiInput) {
+    aiInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendAiMessage();
+    });
+}
+
 if (logoutBtn) {
+
     logoutBtn.addEventListener('click', () => {
         currentUser = null;
         localStorage.removeItem('nexus_user');

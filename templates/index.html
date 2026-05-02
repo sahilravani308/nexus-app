@@ -23,7 +23,20 @@
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- PWA Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(reg => console.log('Nexus ServiceWorker active'))
+                    .catch(err => console.log('SW registration failed', err));
+            });
+        }
+    </script>
 </head>
+
 <body>
     <!-- Login Screen -->
     <div class="login-container" id="loginScreen">
@@ -376,7 +389,30 @@
             </form>
         </div>
     </div>
+    
+    <!-- AI Assistant Floating Widget -->
+    <div class="ai-widget" id="aiWidget">
+        <div class="ai-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="ai-avatar">AI</div>
+                <span>Nexus AI</span>
+            </div>
+            <button id="closeAiBtn" style="background: none; border: none; color: white; cursor: pointer;"><i class="fa-solid fa-minus"></i></button>
+        </div>
+        <div class="ai-chat-box" id="aiChatBox">
+            <div class="ai-msg bot">Hi! I'm Nexus AI. How can I help you today?</div>
+        </div>
+        <div class="ai-footer">
+            <input type="text" id="aiInput" placeholder="Ask Nexus AI...">
+            <button id="sendAiBtn"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+    
+    <button class="ai-fab" id="aiFab">
+        <i class="fa-solid fa-robot"></i>
+    </button>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
+
 </html>

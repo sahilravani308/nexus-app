@@ -5,6 +5,9 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_talisman import Talisman
+import google.generativeai as genai
+import google.cloud.logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-nexus-key')
@@ -16,9 +19,27 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.absp
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Structured Logging Setup
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("nexus")
+# Enterprise Security: Talisman (Force HTTPS, CSP, Security Headers)
+# We disable force_https for local development
+Talisman(app, content_security_policy=None, force_https=False)
+
+# Structured Google Cloud Logging
+try:
+    client = google.cloud.logging.Client()
+    client.setup_logging()
+    logger = logging.getLogger("nexus")
+    logger.info("Integrated with Google Cloud Logging.")
+except:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("nexus")
+    logger.warning("Cloud Logging not available, using local logging.")
+
+# Gemini AI Setup
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    logger.warning("GEMINI_API_KEY not found. AI Assistant will be disabled.")
 
 
 # ── Models ──────────────────────────────────────────────────────────────────
@@ -341,7 +362,38 @@ def check_access():
     
     return jsonify({"access": False}), 200
 
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    if not GEMINI_API_KEY:
+        return jsonify({"message": "AI Assistant is currently unavailable (API Key missing)."}), 503
+    
+    data = request.json
+    user_query = data.get('message')
+    username = data.get('username')
+    
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Contextual prompt for Nexus
+        context = f"You are Nexus AI, a helpful collaboration assistant for the Nexus platform. The user is {username}."
+        full_prompt = f"{context}\n\nUser: {user_query}\nAI:"
+        
+        response = model.generate_content(full_prompt)
+        
+        # Log AI interaction to BQ
+        trigger_bg_sync("user_activity", {
+            "username": username,
+            "action": "AI_CHAT",
+            "details": f"Query: {user_query[:50]}..."
+        })
+        
+        return jsonify({"response": response.text})
+    except Exception as e:
+        logger.error(f"Gemini API Error: {e}")
+        return jsonify({"message": "Nexus AI is having trouble processing your request."}), 500
+
 @app.route('/api/teams/add-member', methods=['POST'])
+
 def add_member():
     data = request.json
     admin_name = data.get('admin')
