@@ -179,19 +179,15 @@
                     <aside class="messages-sidebar">
                         <div class="messages-sidebar-header">
                             <h3>Channels</h3>
-                            <button class="icon-btn"><i class="fa-solid fa-plus"></i></button>
                         </div>
-                        <ul class="channel-list">
-                            <li class="active"><i class="fa-solid fa-hashtag"></i> general</li>
-                            <li><i class="fa-solid fa-hashtag"></i> product-design</li>
-                            <li><i class="fa-solid fa-hashtag"></i> engineering</li>
+                        <ul class="channel-list" id="channelList">
+                            <!-- Authorized channels rendered here -->
                         </ul>
                         <div class="messages-sidebar-header" style="margin-top: 24px;">
                             <h3>Direct Messages</h3>
                         </div>
-                        <ul class="channel-list">
-                            <li><img src="https://ui-avatars.com/api/?name=Alice&background=ec4899&color=fff" class="avatar avatar-sm"> Alice</li>
-                            <li><img src="https://ui-avatars.com/api/?name=Bob&background=14b8a6&color=fff" class="avatar avatar-sm"> Bob</li>
+                        <ul class="channel-list" id="dmList">
+                            <!-- Direct messages rendered here -->
                         </ul>
                     </aside>
                     <div class="chat-area">
@@ -324,6 +320,38 @@
                     <!-- Members listed here -->
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- User Edit Modal -->
+    <div class="modal-overlay" id="editUserModal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Edit User: <span id="editTargetName"></span></h2>
+                <button class="icon-btn close-btn" id="closeEditUserModalBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUsername">
+                <div class="form-group">
+                    <label for="editRole">Role</label>
+                    <select id="editRole">
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>Team Assignments</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                        <label><input type="checkbox" name="editTeams" value="Product Design"> Product Design</label>
+                        <label><input type="checkbox" name="editTeams" value="Engineering"> Engineering</label>
+                        <label><input type="checkbox" name="editTeams" value="Marketing"> Marketing</label>
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 30px;">
+                    <button type="button" class="secondary-btn" id="cancelEditUserBtn">Cancel</button>
+                    <button type="submit" class="primary-btn">Save Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 

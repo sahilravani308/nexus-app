@@ -20,6 +20,11 @@ const teamRoster = document.getElementById('teamRoster');
 const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
+const channelList = document.getElementById('channelList');
+const dmList = document.getElementById('dmList');
+const editUserModal = document.getElementById('editUserModal');
+const editUserForm = document.getElementById('editUserForm');
+
 
 
 
@@ -27,6 +32,8 @@ const chatInput = document.getElementById('chatInput');
 let draggedTask = null;
 let currentTeam = 'Product Design';
 let currentChannel = 'general';
+let currentRecipient = null;
+
 
 
 // Initialize the board
@@ -172,10 +179,13 @@ async function renderTeamDirectory() {
             
             const teamBadges = user.teams.map(t => `<span class="badge" style="font-size: 10px; margin-right: 5px;">${t}</span>`).join('');
             
+            const isAdmin = localStorage.getItem('nexus_role') === 'admin';
+            const editBtn = isAdmin ? `<button class="icon-btn edit-user-btn" data-username="${user.username}" data-role="${user.role}" data-teams='${JSON.stringify(user.teams)}' style="margin-left: 10px;"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+
             row.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <img src="${getAvatar(user.username)}" class="avatar avatar-sm">
-                    <span class="mytask-name">${user.username}</span>
+                    <span class="mytask-name">${user.username} ${editBtn}</span>
                 </div>
                 <span style="text-transform: capitalize;">${user.role}</span>
                 <div>${teamBadges || '<span style="color: var(--text-muted)">No teams</span>'}</div>
@@ -183,18 +193,80 @@ async function renderTeamDirectory() {
             `;
             listContainer.appendChild(row);
         });
+
+        // Add Edit Button listeners
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                openEditUserModal(btn.dataset);
+            });
+        });
     } catch (err) {
         console.error('Failed to fetch users:', err);
         listContainer.innerHTML = '<div class="mytask-row"><span style="color: var(--accent-danger)">Error loading directory.</span></div>';
     }
 }
 
+// User Edit Logic
+function openEditUserModal(data) {
+    document.getElementById('editTargetName').textContent = data.username;
+    document.getElementById('editUsername').value = data.username;
+    document.getElementById('editRole').value = data.role;
+    
+    const userTeams = JSON.parse(data.teams);
+    document.querySelectorAll('input[name="editTeams"]').forEach(cb => {
+        cb.checked = userTeams.includes(cb.value);
+    });
+    
+    editUserModal.classList.add('active');
+}
+
+if (editUserForm) {
+    editUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('editUsername').value;
+        const role = document.getElementById('editRole').value;
+        const teams = Array.from(document.querySelectorAll('input[name="editTeams"]:checked')).map(cb => cb.value);
+        
+        try {
+            const res = await fetch('/api/users/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, role, teams })
+            });
+            const data = await res.json();
+            alert(data.message);
+            editUserModal.classList.remove('active');
+            renderTeamDirectory();
+            
+            // If editing self, update local cache
+            if (username === currentUser) {
+                localStorage.setItem('nexus_role', role);
+                localStorage.setItem('nexus_user_teams', JSON.stringify(teams));
+                renderTeamSelect();
+            }
+        } catch (err) {
+            console.error('Failed to update user:', err);
+        }
+    });
+}
+
+document.getElementById('closeEditUserModalBtn')?.addEventListener('click', () => editUserModal.classList.remove('active'));
+document.getElementById('cancelEditUserBtn')?.addEventListener('click', () => editUserModal.classList.remove('active'));
+
+
 // Render "Messages" view
 async function renderMessages() {
     if (!chatMessages) return;
     
     try {
-        const response = await fetch(`/api/messages?channel=${currentChannel}`);
+        let url = `/api/messages?user=${currentUser}`;
+        if (currentRecipient) {
+            url += `&recipient=${currentRecipient}`;
+        } else {
+            url += `&channel=${currentChannel}`;
+        }
+        
+        const response = await fetch(url);
         const messages = await response.json();
         
         chatMessages.innerHTML = '';
@@ -202,11 +274,17 @@ async function renderMessages() {
         // Update header
         const chatTitle = document.querySelector('.chat-title h3');
         const chatDesc = document.querySelector('.chat-title p');
-        if (chatTitle) chatTitle.innerHTML = `<i class="fa-solid fa-hashtag"></i> ${currentChannel}`;
-        if (chatDesc) chatDesc.textContent = `Discussion for ${currentChannel}`;
+        if (chatTitle) {
+            chatTitle.innerHTML = currentRecipient ? 
+                `<img src="${getAvatar(currentRecipient)}" class="avatar avatar-sm"> ${currentRecipient}` : 
+                `<i class="fa-solid fa-hashtag"></i> ${currentChannel}`;
+        }
+        if (chatDesc) {
+            chatDesc.textContent = currentRecipient ? `Private conversation with ${currentRecipient}` : `Discussion for ${currentChannel}`;
+        }
         
         if (messages.length === 0) {
-            chatMessages.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No messages in #${currentChannel} yet.</div>`;
+            chatMessages.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No messages yet.</div>`;
         }
         
         messages.forEach(msg => {
@@ -228,32 +306,55 @@ async function renderMessages() {
             chatMessages.appendChild(msgEl);
         });
         
-        // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
+        renderMessagingSidebar();
     } catch (err) {
         console.error('Failed to fetch messages:', err);
     }
 }
 
-// Channel Switching Logic
-function setupChannelListeners() {
-    const channels = document.querySelectorAll('.channel-list li');
+async function renderMessagingSidebar() {
+    if (!channelList || !dmList) return;
+    
+    const userTeams = JSON.parse(localStorage.getItem('nexus_user_teams')) || [];
+    const isAdmin = localStorage.getItem('nexus_role') === 'admin';
+    
+    // Render Channels (Restricted)
+    const channels = ['general', 'Product Design', 'Engineering', 'Marketing'];
+    channelList.innerHTML = '';
     channels.forEach(ch => {
-        ch.addEventListener('click', () => {
-            // Check if it's a channel (has hashtag) or DM (has image)
-            const icon = ch.querySelector('i');
-            if (icon && icon.classList.contains('fa-hashtag')) {
-                const newChannel = ch.textContent.trim();
-                currentChannel = newChannel;
-                
-                // Update UI active state
-                channels.forEach(c => c.classList.remove('active'));
-                ch.classList.add('active');
-                
+        if (ch === 'general' || userTeams.includes(ch) || isAdmin) {
+            const li = document.createElement('li');
+            if (ch === currentChannel && !currentRecipient) li.classList.add('active');
+            li.innerHTML = `<i class="fa-solid fa-hashtag"></i> ${ch}`;
+            li.addEventListener('click', () => {
+                currentChannel = ch;
+                currentRecipient = null;
                 renderMessages();
+            });
+            channelList.appendChild(li);
+        }
+    });
+
+    // Render DMs
+    try {
+        const res = await fetch('/api/users');
+        const users = await res.json();
+        dmList.innerHTML = '';
+        users.forEach(user => {
+            if (user.username !== currentUser) {
+                const li = document.createElement('li');
+                if (user.username === currentRecipient) li.classList.add('active');
+                li.innerHTML = `<img src="${getAvatar(user.username)}" class="avatar avatar-sm"> ${user.username}`;
+                li.addEventListener('click', () => {
+                    currentRecipient = user.username;
+                    currentChannel = null;
+                    renderMessages();
+                });
+                dmList.appendChild(li);
             }
         });
-    });
+    } catch (err) {}
 }
 
 // Send Message
@@ -269,6 +370,7 @@ if (chatForm) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sender: currentUser,
+                    recipient: currentRecipient,
                     content: content,
                     channel: currentChannel
                 })

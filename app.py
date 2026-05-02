@@ -39,8 +39,9 @@ class Task(db.Model):
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     sender = db.Column(db.String(80), nullable=False)
+    recipient = db.Column(db.String(80)) # For DMs
     content = db.Column(db.Text, nullable=False)
-    channel = db.Column(db.String(80), default='general')
+    channel = db.Column(db.String(80)) # For group channels
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -76,10 +77,23 @@ def get_users():
 
 @app.route('/api/messages', methods=['GET'])
 def get_messages():
-    channel = request.args.get('channel', 'general')
-    messages = Message.query.filter_by(channel=channel).order_by(Message.timestamp.asc()).all()
+    user = request.args.get('user')
+    channel = request.args.get('channel')
+    recipient = request.args.get('recipient')
+    
+    if recipient:
+        # DM logic: messages between sender and recipient
+        messages = Message.query.filter(
+            ((Message.sender == user) & (Message.recipient == recipient)) |
+            ((Message.sender == recipient) & (Message.recipient == user))
+        ).order_by(Message.timestamp.asc()).all()
+    else:
+        # Channel logic
+        messages = Message.query.filter_by(channel=channel).order_by(Message.timestamp.asc()).all()
+        
     return jsonify([{
         "sender": m.sender,
+        "recipient": m.recipient,
         "content": m.content,
         "timestamp": m.timestamp.strftime("%H:%M")
     } for m in messages])
@@ -89,12 +103,56 @@ def send_message():
     data = request.json
     new_msg = Message(
         sender=data.get('sender'),
+        recipient=data.get('recipient'),
         content=data.get('content'),
-        channel=data.get('channel', 'general')
+        channel=data.get('channel')
     )
     db.session.add(new_msg)
     db.session.commit()
     return jsonify({"message": "Message sent"}), 201
+
+# ── User Management & BigQuery Sync ──────────────────────────────────────────
+
+def sync_to_bigquery(username, role, teams):
+    try:
+        from google.cloud import bigquery
+        client = bigquery.Client()
+        project = client.project
+        table_id = f"{project}.nexus_rbac.user_roles"
+        
+        # Simple stream insert for demo
+        rows_to_insert = [
+            {"username": username, "role": role, "team": ",".join(teams)}
+        ]
+        client.insert_rows_json(table_id, rows_to_insert)
+        print(f"Synced {username} to BigQuery.")
+    except Exception as e:
+        print(f"BigQuery sync failed: {e}")
+
+@app.route('/api/users/update', methods=['POST'])
+def update_user():
+    data = request.json
+    target_username = data.get('username')
+    new_role = data.get('role')
+    new_teams = data.get('teams', [])
+    
+    user = User.query.filter_by(username=target_username).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+        
+    user.role = new_role
+    
+    # Update team relationships
+    team_objs = Team.query.filter(Team.name.in_(new_teams)).all()
+    user.teams = team_objs
+    
+    db.session.commit()
+    
+    # Sync to BigQuery
+    sync_to_bigquery(target_username, new_role, new_teams)
+    
+    return jsonify({"message": f"Updated user {target_username}"}), 200
+
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
