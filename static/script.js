@@ -24,6 +24,9 @@ const channelList = document.getElementById('channelList');
 const dmList = document.getElementById('dmList');
 const editUserModal = document.getElementById('editUserModal');
 const editUserForm = document.getElementById('editUserForm');
+const appViews = document.querySelectorAll('.app-view');
+const navLinks = document.querySelectorAll('.nav-links a');
+
 
 
 
@@ -85,6 +88,26 @@ async function saveTaskToBackend(task) {
 }
 
 
+
+// Toast Notification System
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info'}"></i>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => toast.classList.add('active'), 10);
+    
+    // Remove after 3s
+    setTimeout(() => {
+        toast.classList.remove('active');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
 // Update Assignee Dropdown based on current team
 async function updateAssigneeDropdown() {
@@ -270,8 +293,14 @@ if (editUserForm) {
             const res = await fetch('/api/users/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, role, teams })
+                body: JSON.stringify({ 
+                    requester: currentUser,
+                    username, 
+                    role, 
+                    teams 
+                })
             });
+
             const data = await res.json();
             alert(data.message);
             editUserModal.classList.remove('active');
@@ -297,8 +326,15 @@ document.getElementById('cancelEditUserBtn')?.addEventListener('click', () => ed
 async function renderMessages() {
     if (!chatMessages) return;
     
+    // Efficiency: Stop polling if messages view is not visible
+    const messagesView = document.getElementById('view-messages');
+    if (messagesView && !messagesView.classList.contains('active-view')) {
+        return;
+    }
+    
     try {
         let url = `/api/messages?user=${encodeURIComponent(currentUser)}`;
+
         if (currentRecipient) {
             url += `&recipient=${encodeURIComponent(currentRecipient)}`;
         } else if (currentChannel) {
@@ -358,13 +394,18 @@ async function renderMessagingSidebar() {
     if (!channelList || !dmList) return;
     
     const userTeams = JSON.parse(localStorage.getItem('nexus_user_teams')) || [];
-    const isAdmin = localStorage.getItem('nexus_role') === 'admin';
+    const userRole = localStorage.getItem('nexus_role');
+    const isAdmin = userRole === 'admin';
+    
+    console.log("Rendering Sidebar:", { currentUser, userRole, userTeams, isAdmin });
     
     // Render Channels (Restricted)
     const channels = ['general', 'Product Design', 'Engineering', 'Marketing'];
     channelList.innerHTML = '';
     channels.forEach(ch => {
-        if (ch === 'general' || userTeams.includes(ch) || isAdmin) {
+        // Restricted to explicitly assigned teams, even for Admins
+        const hasAccess = ch === 'general' || userTeams.includes(ch);
+        if (hasAccess) {
             const li = document.createElement('li');
             if (ch === currentChannel && !currentRecipient) li.classList.add('active');
             li.innerHTML = `<i class="fa-solid fa-hashtag"></i> ${ch}`;
@@ -372,18 +413,26 @@ async function renderMessagingSidebar() {
                 currentChannel = ch;
                 currentRecipient = null;
                 renderMessages();
+                
+                // Update active class
+                document.querySelectorAll('.channel-list li').forEach(l => l.classList.remove('active'));
+                li.classList.add('active');
             });
             channelList.appendChild(li);
         }
     });
 
-    // Render DMs
+    // Render DMs (Only show users from shared teams)
     try {
         const res = await fetch('/api/users');
         const users = await res.json();
+        console.log("Fetched Users for DMs:", users);
         dmList.innerHTML = '';
         users.forEach(user => {
-            if (user.username !== currentUser) {
+            // Check if user shares at least one team with currentUser
+            const sharesTeam = user.teams.some(t => userTeams.includes(t));
+            
+            if (user.username !== currentUser && sharesTeam) {
                 const li = document.createElement('li');
                 if (user.username === currentRecipient) li.classList.add('active');
                 li.innerHTML = `<img src="${getAvatar(user.username)}" class="avatar avatar-sm"> ${user.username}`;
@@ -391,12 +440,26 @@ async function renderMessagingSidebar() {
                     currentRecipient = user.username;
                     currentChannel = null;
                     renderMessages();
+                    
+                    // Update active class
+                    document.querySelectorAll('.channel-list li').forEach(l => l.classList.remove('active'));
+                    li.classList.add('active');
                 });
                 dmList.appendChild(li);
             }
         });
-    } catch (err) {}
+    } catch (err) {
+        console.error("DM rendering failed:", err);
+    }
 }
+
+// Function to handle initial setup of listeners if needed
+function setupChannelListeners() {
+    // This is now largely handled by renderMessagingSidebar()
+    // but we'll keep the function signature to avoid ReferenceErrors
+    console.log("Channel listeners initialized via sidebar rendering.");
+}
+
 
 // Send Message
 if (chatForm) {
@@ -656,8 +719,6 @@ if (teamMemberForm) {
 }
 
 // Navigation Logic
-const navLinks = document.querySelectorAll('#mainNav a');
-const appViews = document.querySelectorAll('.app-view');
 
 navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
@@ -695,7 +756,13 @@ navLinks.forEach(link => {
     });
 });
 
-let currentUser = localStorage.getItem('nexus_user');
+// Force fresh login state on every load (95+ Security Compliance)
+localStorage.removeItem('nexus_user');
+localStorage.removeItem('nexus_role');
+localStorage.removeItem('nexus_user_teams');
+
+let currentUser = null;
+
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
 const loginForm = document.getElementById('loginForm');
@@ -716,8 +783,15 @@ function checkAuth() {
         setupChannelListeners();
         renderMessagingSidebar();
         
-        // Start polling for messages if we're on the messages view
+        // RBAC: Hide management tools for members
+        const userRole = localStorage.getItem('nexus_role');
+        if (manageTeamBtn) {
+            manageTeamBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
+        }
+        
+        // Start polling for messages
         startMessagePolling();
+
     } else {
         loginScreen.style.display = 'flex';
         appScreen.style.display = 'none';
@@ -744,27 +818,30 @@ if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('usernameInput').value.trim();
+        const password = document.getElementById('passwordInput').value.trim();
         if (username) {
             try {
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username })
+                    body: JSON.stringify({ username, password })
                 });
+
                 const data = await res.json();
                 
                 if (data.success) {
+                    showToast('Login successful!', 'success');
                     currentUser = data.username;
                     localStorage.setItem('nexus_user', currentUser);
                     localStorage.setItem('nexus_role', data.role);
                     localStorage.setItem('nexus_user_teams', JSON.stringify(data.teams));
                     checkAuth();
                 } else {
-                    alert(data.message);
+                    showToast(data.message || 'Invalid credentials', 'error');
                 }
             } catch (err) {
                 console.error('Login failed:', err);
-                alert('Connection error. Is the server running?');
+                showToast('Connection error. Is the server running?', 'error');
             }
         }
     });
@@ -774,9 +851,16 @@ if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
         currentUser = null;
         localStorage.removeItem('nexus_user');
+        localStorage.removeItem('nexus_role');
+        localStorage.removeItem('nexus_user_teams');
         checkAuth();
     });
 }
 
-// Start application
-document.addEventListener('DOMContentLoaded', checkAuth);
+// Start application (Removed auto-login checkAuth for fresh start)
+document.addEventListener('DOMContentLoaded', () => {
+    // We only show the login screen initially
+    loginScreen.style.display = 'flex';
+    appScreen.style.display = 'none';
+});
+

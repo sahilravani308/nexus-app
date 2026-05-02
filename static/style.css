@@ -547,6 +547,7 @@ label {
 }
 
 input[type="text"],
+input[type="password"],
 textarea,
 select {
     width: 100%;
@@ -943,12 +944,43 @@ option {
     color: var(--text-primary);
 }
 
-.logout-btn {
-    margin-left: auto;
-    color: var(--accent-danger);
-}
-
 .logout-btn:hover {
     background: rgba(239, 68, 68, 0.15);
     color: #fca5a5;
 }
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--bg-light);
+    color: white;
+    padding: 16px 24px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 3000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border-left: 4px solid var(--accent-primary);
+    backdrop-filter: blur(10px);
+}
+
+.toast.active {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast-error { border-left-color: var(--accent-danger); }
+.toast-success { border-left-color: var(--accent-success); }
+.toast-info { border-left-color: var(--accent-primary); }
+
+.toast i { font-size: 18px; }
+.toast-error i { color: var(--accent-danger); }
+.toast-success i { color: var(--accent-success); }
+.toast-info i { color: var(--accent-primary); }
+

@@ -1,52 +1,79 @@
 from google.cloud import bigquery
 import os
 
-def init_bigquery(project_id):
-    client = bigquery.Client(project=project_id)
-    dataset_id = f"{project_id}.nexus_rbac"
+def initialize_bigquery():
+    client = bigquery.Client()
+    dataset_id = f"{client.project}.nexus_audit"
     
-    # Create Dataset
+    # Create dataset if not exists
     dataset = bigquery.Dataset(dataset_id)
     dataset.location = "US"
-    
     try:
-        dataset = client.create_dataset(dataset, timeout=30)
-        print(f"Created dataset {client.project}.{dataset.dataset_id}")
-    except Exception as e:
-        print(f"Dataset might already exist: {e}")
+        client.create_dataset(dataset, timeout=30)
+        print(f"Created dataset {dataset_id}")
+    except:
+        print(f"Dataset {dataset_id} already exists")
 
-    # Create Roles Table
-    roles_table_id = f"{dataset_id}.user_roles"
-    schema = [
-        bigquery.SchemaField("username", "STRING", mode="REQUIRED"),
-        bigquery.SchemaField("role", "STRING", mode="REQUIRED"),
-        bigquery.SchemaField("team", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("updated_at", "TIMESTAMP", default_value_expression="CURRENT_TIMESTAMP"),
-    ]
-    table = bigquery.Table(roles_table_id, schema=schema)
-    try:
-        client.create_table(table)
-        print(f"Created table {roles_table_id}")
-    except Exception as e:
-        print(f"Table might already exist: {e}")
+    # Define tables
+    tables = {
+        "user_activity": [
+            bigquery.SchemaField("username", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("action", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("details", "STRING"),
+            bigquery.SchemaField("timestamp", "TIMESTAMP", mode="REQUIRED"),
+        ],
+        "users_master": [
+            bigquery.SchemaField("username", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("role", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("teams", "STRING"), # Comma-separated
+            bigquery.SchemaField("password_hash", "STRING"),
+        ],
 
-    # Create Access Logs Table
-    logs_table_id = f"{dataset_id}.access_logs"
-    schema = [
-        bigquery.SchemaField("username", "STRING", mode="REQUIRED"),
-        bigquery.SchemaField("action", "STRING", mode="REQUIRED"), # e.g., 'view_board', 'add_member'
-        bigquery.SchemaField("target", "STRING", mode="NULLABLE"), # e.g., 'Engineering'
-        bigquery.SchemaField("status", "STRING", mode="REQUIRED"), # e.g., 'allowed', 'denied'
-        bigquery.SchemaField("timestamp", "TIMESTAMP", default_value_expression="CURRENT_TIMESTAMP"),
-    ]
-    table = bigquery.Table(logs_table_id, schema=schema)
-    try:
-        client.create_table(table)
-        print(f"Created table {logs_table_id}")
-    except Exception as e:
-        print(f"Table might already exist: {e}")
+        "task_audit": [
+            bigquery.SchemaField("task_id", "STRING"),
+            bigquery.SchemaField("title", "STRING"),
+            bigquery.SchemaField("assignee", "STRING"),
+            bigquery.SchemaField("status", "STRING"),
+            bigquery.SchemaField("timestamp", "TIMESTAMP"),
+        ],
+        "message_logs": [
+            bigquery.SchemaField("sender", "STRING"),
+            bigquery.SchemaField("recipient", "STRING"),
+            bigquery.SchemaField("channel", "STRING"),
+            bigquery.SchemaField("timestamp", "TIMESTAMP"),
+        ]
+    }
+
+    for table_name, schema in tables.items():
+        table_id = f"{dataset_id}.{table_name}"
+        table = bigquery.Table(table_id, schema=schema)
+        try:
+            client.create_table(table, timeout=30)
+            print(f"Created table {table_id}")
+        except:
+            print(f"Table {table_id} already exists")
+
+    # Seed initial users to BigQuery if empty
+    table_id = f"{dataset_id}.users_master"
+    rows = list(client.query(f"SELECT * FROM `{table_id}` LIMIT 1").result())
+    if not rows:
+        from werkzeug.security import generate_password_hash
+        example_users = [
+            {'username': 'Alice', 'role': 'admin', 'teams': 'Product Design,Engineering'},
+            {'username': 'Bob', 'role': 'member', 'teams': 'Product Design'},
+            {'username': 'Charlie', 'role': 'member', 'teams': 'Engineering'},
+            {'username': 'Sahil', 'role': 'member', 'teams': 'Product Design'},
+            {'username': 'Admin', 'role': 'admin', 'teams': 'Marketing'}
+        ]
+        for u in example_users:
+            u['password_hash'] = generate_password_hash('password123')
+            
+        errors = client.insert_rows_json(table_id, example_users)
+        if not errors:
+            print("Seeded BigQuery users_master table.")
+        else:
+            print(f"Failed to seed BigQuery: {errors}")
 
 if __name__ == "__main__":
-    # Get project ID from env or fallback
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "ultimate-opus-329309")
-    init_bigquery(project_id)
+    initialize_bigquery()
+

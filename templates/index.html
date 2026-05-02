@@ -3,11 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus - Team Collaboration</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Nexus | Enterprise Team Collaboration Platform</title>
+    <meta name="description" content="Nexus is a high-performance, secure collaboration tool for engineering and design teams. Manage tasks, direct messages, and team directory in real-time.">
+    <meta name="keywords" content="collaboration, task management, kanban, enterprise chat, engineering tools">
+    
+    <!-- OpenGraph / Social Media Meta Tags -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Nexus | Secure Team Collaboration">
+    <meta property="og:description" content="Streamline your workflow with Nexus. The all-in-one platform for modern teams.">
+    <meta property="og:image" content="https://ui-avatars.com/api/?name=Nexus&background=6366f1&color=fff&size=512">
+    
+    <!-- Performance Hints -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://ui-avatars.com">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <!-- Login Screen -->
@@ -22,9 +37,15 @@
             <form id="loginForm">
                 <div class="form-group">
                     <label for="usernameInput">Username</label>
-                    <input type="text" id="usernameInput" required placeholder="e.g., Alice">
+                    <input type="text" id="usernameInput" placeholder="Enter username (e.g. Alice)" required>
                 </div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="passwordInput">Password</label>
+                    <input type="password" id="passwordInput" placeholder="••••••••" required>
+                </div>
+
                 <button type="submit" class="primary-btn login-btn">Enter Workspace</button>
+
             </form>
         </div>
     </div>
@@ -39,12 +60,13 @@
                 </div>
             </div>
             <ul class="nav-links" id="mainNav">
-                <li class="active"><a href="#" data-view="dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
-                <li><a href="#" data-view="mytasks"><i class="fa-solid fa-list-check"></i> My Tasks</a></li>
-                <li><a href="#" data-view="team"><i class="fa-solid fa-users"></i> Team</a></li>
-                <li><a href="#" data-view="messages"><i class="fa-solid fa-message"></i> Messages</a></li>
-                <li><a href="#" data-view="settings"><i class="fa-solid fa-gear"></i> Settings</a></li>
+                <li class="active"><a href="#" data-view="dashboard" aria-label="Go to Dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+                <li><a href="#" data-view="mytasks" aria-label="Go to My Tasks"><i class="fa-solid fa-list-check"></i> My Tasks</a></li>
+                <li><a href="#" data-view="team" aria-label="Go to Team Directory"><i class="fa-solid fa-users"></i> Team</a></li>
+                <li><a href="#" data-view="messages" aria-label="Go to Messages"><i class="fa-solid fa-message"></i> Messages</a></li>
+                <li><a href="#" data-view="settings" aria-label="Go to Settings"><i class="fa-solid fa-gear"></i> Settings</a></li>
             </ul>
+
             <div class="user-profile">
                 <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" alt="User Profile" class="avatar" id="sidebarAvatar">
                 <div class="user-info">
@@ -62,9 +84,10 @@
                     <input type="text" placeholder="Search tasks, members...">
                 </div>
                 <div class="header-actions">
-                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
-                    <button class="primary-btn" id="newTaskBtn"><i class="fa-solid fa-plus"></i> New Task</button>
+                    <button class="icon-btn" aria-label="Notifications"><i class="fa-regular fa-bell"></i></button>
+                    <button class="primary-btn" id="newTaskBtn" aria-label="Create New Task"><i class="fa-solid fa-plus"></i> New Task</button>
                 </div>
+
             </header>
 
             <div id="view-dashboard" class="app-view active-view">

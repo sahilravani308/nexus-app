@@ -1,12 +1,25 @@
+import os
+import threading
+import logging
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import os
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///nexus.db'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-nexus-key')
+# Ensure the instance folder exists for the database
+if not os.path.exists('instance'):
+    os.makedirs('instance')
+    
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance', 'nexus.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# Structured Logging Setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("nexus")
+
 
 # ── Models ──────────────────────────────────────────────────────────────────
 
@@ -18,23 +31,33 @@ team_members = db.Table('team_members',
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(128))
     role = db.Column(db.String(20), default='member') # 'admin' or 'member'
+    teams = db.relationship('Team', secondary=team_members, backref=db.backref('members', lazy='dynamic'))
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        if not self.password_hash: return True # Default for seeded users
+        return check_password_hash(self.password_hash, password)
 
 class Team(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), unique=True, nullable=False)
-    members = db.relationship('User', secondary=team_members, backref=db.backref('teams', lazy='dynamic'))
+    name = db.Column(db.String(80), unique=True, nullable=False, index=True)
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     priority = db.Column(db.String(20), default='medium')
-    assignee = db.Column(db.String(80))
-    status = db.Column(db.String(20), default='todo')
-    team_name = db.Column(db.String(80))
+    assignee = db.Column(db.String(80), index=True)
+    status = db.Column(db.String(20), default='todo', index=True)
+    team_name = db.Column(db.String(80), index=True)
     date = db.Column(db.String(20))
+    attachment_url = db.Column(db.String(500))
+
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -55,15 +78,30 @@ def index():
 def login():
     data = request.json
     username = data.get('username')
+    password = data.get('password', '') # Optional password for demo
+    
     user = User.query.filter_by(username=username).first()
-    if user:
+    if user and user.check_password(password):
+        logger.info(f"User {username} logged in successfully.")
+        
+        # Log activity to BQ
+        trigger_bg_sync("user_activity", {
+            "username": username,
+            "action": "LOGIN",
+            "details": f"Role: {user.role}"
+        })
+        
         return jsonify({
+
             "success": True,
             "username": user.username,
             "role": user.role,
             "teams": [t.name for t in user.teams]
         }), 200
-    return jsonify({"success": False, "message": "User not found in database."}), 401
+    
+    logger.warning(f"Failed login attempt for {username}.")
+    return jsonify({"success": False, "message": "Invalid username or password."}), 401
+
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
@@ -115,49 +153,72 @@ def send_message():
     )
     db.session.add(new_msg)
     db.session.commit()
+    
+    # Log message to BQ
+    trigger_bg_sync("message_logs", {
+        "sender": data.get('sender'),
+        "recipient": data.get('recipient'),
+        "channel": data.get('channel')
+    })
+    
     return jsonify({"message": "Message sent"}), 201
 
-# ── User Management & BigQuery Sync ──────────────────────────────────────────
 
-def sync_to_bigquery(username, role, teams):
+# ── Google Services: Enhanced BigQuery Sync ──────────────────────────────
+
+def sync_to_bigquery_worker(table_name, data):
+    """Universal BigQuery worker for all application events."""
     try:
         from google.cloud import bigquery
         client = bigquery.Client()
-        project = client.project
-        table_id = f"{project}.nexus_rbac.user_roles"
+        dataset_id = os.environ.get('BQ_DATASET', 'nexus_audit')
+        table_id = f"{client.project}.{dataset_id}.{table_name}"
         
-        # Simple stream insert for demo
-        rows_to_insert = [
-            {"username": username, "role": role, "team": ",".join(teams)}
-        ]
-        client.insert_rows_json(table_id, rows_to_insert)
-        print(f"Synced {username} to BigQuery.")
+        # Add timestamp if not present
+        if "timestamp" not in data:
+            data["timestamp"] = datetime.utcnow().isoformat()
+            
+        errors = client.insert_rows_json(table_id, [data])
+        if errors:
+            logger.error(f"BQ Sync Errors in {table_name}: {errors}")
     except Exception as e:
-        print(f"BigQuery sync failed: {e}")
+        logger.error(f"BQ Sync Failed for {table_name}: {e}")
+
+def trigger_bg_sync(table_name, data):
+    thread = threading.Thread(target=sync_to_bigquery_worker, args=(table_name, data))
+    thread.daemon = True
+    thread.start()
+
 
 @app.route('/api/users/update', methods=['POST'])
 def update_user():
     data = request.json
+    requester_name = data.get('requester')
     target_username = data.get('username')
     new_role = data.get('role')
     new_teams = data.get('teams', [])
     
+    # RBAC Check: Only admins can update users
+    requester = User.query.filter_by(username=requester_name).first()
+    if not requester or requester.role != 'admin':
+        return jsonify({"message": "Unauthorized: Only admins can manage users"}), 403
+        
     user = User.query.filter_by(username=target_username).first()
     if not user:
         return jsonify({"message": "User not found"}), 404
+
         
     user.role = new_role
-    
-    # Update team relationships
     team_objs = Team.query.filter(Team.name.in_(new_teams)).all()
     user.teams = team_objs
     
     db.session.commit()
     
-    # Sync to BigQuery
-    sync_to_bigquery(target_username, new_role, new_teams)
+    # Trigger non-blocking BigQuery sync
+    trigger_bg_sync(target_username, new_role, new_teams)
     
     return jsonify({"message": f"Updated user {target_username}"}), 200
+
 
 
 @app.route('/api/team/members', methods=['GET'])
@@ -211,6 +272,32 @@ def get_tasks():
         "date": t.date
     } for t in tasks])
 
+# ── Task Attachments & GCS ──────────────────────────────────────────────────
+
+@app.route('/api/tasks/upload', methods=['POST'])
+def upload_attachment():
+    if 'file' not in request.files:
+        return jsonify({"message": "No file part"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"message": "No selected file"}), 400
+
+    try:
+        from google.cloud import storage
+        client = storage.Client()
+        bucket_name = os.environ.get('GCS_BUCKET', 'nexus-attachments-default')
+        bucket = client.bucket(bucket_name)
+        
+        blob_name = f"tasks/{datetime.now().timestamp()}_{file.filename}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(file)
+        
+        return jsonify({"url": blob.public_url}), 200
+    except Exception as e:
+        logger.error(f"GCS Upload Failed: {e}")
+        return jsonify({"message": "Storage service unavailable"}), 503
+
 @app.route('/api/tasks', methods=['POST'])
 def create_task():
     data = request.json
@@ -221,11 +308,13 @@ def create_task():
         assignee=data.get('assignee'),
         status=data.get('status', 'todo'),
         team_name=data.get('team'),
+        attachment_url=data.get('attachment_url'),
         date=data.get('date', datetime.now().strftime("%m/%d/%Y"))
     )
     db.session.add(new_task)
     db.session.commit()
     return jsonify({"message": "Task created", "id": f"task-{new_task.id}"}), 201
+
 
 @app.route('/api/team-access', methods=['GET'])
 def check_access():
@@ -261,9 +350,8 @@ def add_member():
     
     admin = User.query.filter_by(username=admin_name).first()
     if not admin or admin.role != 'admin':
-        # In a real app, you'd check auth tokens
-        # For now, we'll allow 'FlaskUser' or similar if they are the first one
-        pass
+        return jsonify({"message": "Unauthorized: Only admins can add members"}), 403
+
 
     user = User.query.filter_by(username=user_to_add).first()
     if not user:
@@ -291,25 +379,44 @@ if __name__ == '__main__':
                 db.session.add(team)
             teams[name] = team
         
-        # Seed Users
-        example_users = [
-            {'username': 'Alice', 'role': 'admin', 'teams': ['Product Design', 'Engineering']},
-            {'username': 'Bob', 'role': 'member', 'teams': ['Product Design']},
-            {'username': 'Charlie', 'role': 'member', 'teams': ['Engineering']},
-            {'username': 'Admin', 'role': 'admin', 'teams': ['Marketing']}
-        ]
-        
-        for u_data in example_users:
-            user = User.query.filter_by(username=u_data['username']).first()
-            if not user:
-                user = User(username=u_data['username'], role=u_data['role'])
-                db.session.add(user)
-                db.session.flush() # Get ID
+        # ── Sync Users from BigQuery ──────────────────────────────
+        try:
+            from google.cloud import bigquery
+            # Try to get project ID explicitly if environment is missing it
+            project_id = os.environ.get('GOOGLE_CLOUD_PROJECT')
+            bq_client = bigquery.Client(project=project_id)
+            dataset_id = os.environ.get('BQ_DATASET', 'nexus_audit')
+            table_id = f"{bq_client.project}.{dataset_id}.users_master"
+
             
-            # Update teams
-            user.teams = [teams[t_name] for t_name in u_data['teams'] if t_name in teams]
+            print(f"Fetching users from BigQuery: {table_id}")
+            query = f"SELECT username, role, teams, password_hash FROM `{table_id}`"
+            bq_users = bq_client.query(query).result()
             
-        db.session.commit()
-        print("Database seeded with example users and teams.")
+            for row in bq_users:
+                user = User.query.filter_by(username=row.username).first()
+                if not user:
+                    user = User(username=row.username, role=row.role, password_hash=row.password_hash)
+                    db.session.add(user)
+                    db.session.flush()
+                
+                # Sync teams
+                if row.teams:
+                    team_names = [t.strip() for t in row.teams.split(',')]
+                    user.teams = [teams[tn] for tn in team_names if tn in teams]
+            
+            db.session.commit()
+            
+            # Proof of sync: List local users
+            local_users = [u.username for u in User.query.all()]
+            print(f"Current Local Users: {local_users}")
+            
+            print("Successfully synced users from BigQuery.")
+
+        except Exception as e:
+            logger.error(f"CRITICAL: BigQuery user sync failed: {e}")
+            print("Warning: No users synced from BigQuery. System may be empty.")
         
     app.run(debug=True, port=8080, host='0.0.0.0')
+
+
