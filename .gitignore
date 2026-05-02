@@ -1,3 +1,17 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+
+# Deployment archives
+*.zip
+
+# GCP credentials (never commit these!)
+*.json
+gcloud-service-key.json
+application_default_credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
