@@ -1,16 +1,24 @@
 import os
 import threading
 import logging
+import queue
+import time
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_talisman import Talisman
+from flask_compress import Compress
+from flask_socketio import SocketIO, emit
 import google.generativeai as genai
 import google.cloud.logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-nexus-key')
+# Enable Compression (Gzip) for all responses (Major performance boost)
+Compress(app)
+# Initialize SocketIO for real-time messaging (Efficiency boost)
+socketio = SocketIO(app, cors_allowed_origins="*")
 # Ensure the instance folder exists for the database
 if not os.path.exists('instance'):
     os.makedirs('instance')
@@ -185,30 +193,49 @@ def send_message():
     return jsonify({"message": "Message sent"}), 201
 
 
-# ── Google Services: Enhanced BigQuery Sync ──────────────────────────────
+# ── Google Services: High-Efficiency BigQuery Queue ──────────────────────
 
-def sync_to_bigquery_worker(table_name, data):
-    """Universal BigQuery worker for all application events."""
+bq_queue = queue.Queue()
+
+def bq_worker():
+    """Dedicated background thread to process BigQuery rows sequentially."""
+    from google.cloud import bigquery
+    client = None
     try:
-        from google.cloud import bigquery
         client = bigquery.Client()
-        dataset_id = os.environ.get('BQ_DATASET', 'nexus_audit')
-        table_id = f"{client.project}.{dataset_id}.{table_name}"
-        
-        # Add timestamp if not present
-        if "timestamp" not in data:
-            data["timestamp"] = datetime.utcnow().isoformat()
-            
-        errors = client.insert_rows_json(table_id, [data])
-        if errors:
-            logger.error(f"BQ Sync Errors in {table_name}: {errors}")
     except Exception as e:
-        logger.error(f"BQ Sync Failed for {table_name}: {e}")
+        logger.error(f"Failed to initialize BQ client in worker: {e}")
+        return
+
+    while True:
+        table_name, data = bq_queue.get()
+        if table_name is None: break # Shutdown signal
+        
+        try:
+            dataset_id = os.environ.get('BQ_DATASET', 'nexus_audit')
+            table_id = f"{client.project}.{dataset_id}.{table_name}"
+            
+            if "timestamp" not in data:
+                data["timestamp"] = datetime.utcnow().isoformat()
+                
+            errors = client.insert_rows_json(table_id, [data])
+            if errors:
+                logger.error(f"BQ Sync Errors in {table_name}: {errors}")
+            else:
+                logger.info(f"BQ Sync Successful: {table_name}")
+        except Exception as e:
+            logger.error(f"BQ Sync Failed for {table_name}: {e}")
+        finally:
+            bq_queue.task_done()
+
+# Start the dedicated worker thread
+worker_thread = threading.Thread(target=bq_worker, daemon=True)
+worker_thread.start()
 
 def trigger_bg_sync(table_name, data):
-    thread = threading.Thread(target=sync_to_bigquery_worker, args=(table_name, data))
-    thread.daemon = True
-    thread.start()
+    """Enqueues data for BigQuery sync without blocking or spawning new threads."""
+    bq_queue.put((table_name, data))
+
 
 
 @app.route('/api/users/update', methods=['POST'])
@@ -372,25 +399,23 @@ def ai_chat():
     username = data.get('username')
     
     try:
+        logger.info(f"AI Request received from {username}: {user_query}")
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Contextual prompt for Nexus
-        context = f"You are Nexus AI, a helpful collaboration assistant for the Nexus platform. The user is {username}."
-        full_prompt = f"{context}\n\nUser: {user_query}\nAI:"
+        context = f"You are Nexus AI, a professional assistant. User is {username}."
+        response = model.generate_content(f"{context}\n\nUser Question: {user_query}")
         
-        response = model.generate_content(full_prompt)
-        
-        # Log AI interaction to BQ
-        trigger_bg_sync("user_activity", {
-            "username": username,
-            "action": "AI_CHAT",
-            "details": f"Query: {user_query[:50]}..."
-        })
+        if not response or not response.text:
+            raise ValueError("Gemini returned an empty response")
+            
+        logger.info(f"AI Response success for {username}")
         
         return jsonify({"response": response.text})
     except Exception as e:
-        logger.error(f"Gemini API Error: {e}")
-        return jsonify({"message": "Nexus AI is having trouble processing your request."}), 500
+        logger.error(f"Gemini API Error: {str(e)}")
+        return jsonify({"message": f"Nexus AI Error: {str(e)}"}), 500
+
 
 @app.route('/api/teams/add-member', methods=['POST'])
 

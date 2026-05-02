@@ -988,7 +988,7 @@ option {
 .ai-fab {
     position: fixed;
     bottom: 30px;
-    left: 30px;
+    right: 30px;
     width: 60px;
     height: 60px;
     border-radius: 50%;
@@ -1012,7 +1012,7 @@ option {
 .ai-widget {
     position: fixed;
     bottom: 100px;
-    left: 30px;
+    right: 30px;
     width: 350px;
     height: 500px;
     background: var(--bg-light);
@@ -1025,6 +1025,7 @@ option {
     border: 1px solid rgba(255,255,255,0.1);
     backdrop-filter: blur(10px);
 }
+
 
 .ai-widget.active {
     display: flex;

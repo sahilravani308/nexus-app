@@ -5,4 +5,6 @@ google-cloud-bigquery
 google-generativeai
 google-cloud-logging
 flask-talisman
+flask-compress
+flask-socketio
 pytest

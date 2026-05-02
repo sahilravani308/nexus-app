@@ -789,14 +789,24 @@ function checkAuth() {
             manageTeamBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
         }
         
+        // AI Visibility
+        if (aiFab) aiFab.style.display = 'flex';
+        
         // Start polling for messages
         startMessagePolling();
+
 
     } else {
         loginScreen.style.display = 'flex';
         appScreen.style.display = 'none';
+        
+        // AI Visibility
+        if (aiFab) aiFab.style.display = 'none';
+        if (aiWidget) aiWidget.classList.remove('active');
+        
         stopMessagePolling();
     }
+
 }
 
 function startMessagePolling() {
