@@ -81,15 +81,21 @@ def get_messages():
     channel = request.args.get('channel')
     recipient = request.args.get('recipient')
     
+    print(f"Fetching messages for user={user}, channel={channel}, recipient={recipient}")
+    
     if recipient:
         # DM logic: messages between sender and recipient
         messages = Message.query.filter(
             ((Message.sender == user) & (Message.recipient == recipient)) |
             ((Message.sender == recipient) & (Message.recipient == user))
         ).order_by(Message.timestamp.asc()).all()
-    else:
+        print(f"Found {len(messages)} DM messages")
+    elif channel:
         # Channel logic
         messages = Message.query.filter_by(channel=channel).order_by(Message.timestamp.asc()).all()
+        print(f"Found {len(messages)} channel messages")
+    else:
+        return jsonify([]), 200
         
     return jsonify([{
         "sender": m.sender,
@@ -153,6 +159,14 @@ def update_user():
     
     return jsonify({"message": f"Updated user {target_username}"}), 200
 
+
+@app.route('/api/team/members', methods=['GET'])
+def get_team_members():
+    team_name = request.args.get('team')
+    team = Team.query.filter_by(name=team_name).first()
+    if team:
+        return jsonify([u.username for u in team.members])
+    return jsonify([]), 200
 
 @app.route('/api/tasks/update', methods=['POST'])
 def update_task_status():

@@ -86,6 +86,27 @@ async function saveTaskToBackend(task) {
 
 
 
+// Update Assignee Dropdown based on current team
+async function updateAssigneeDropdown() {
+    const assigneeSelect = document.getElementById('taskAssignee');
+    if (!assigneeSelect) return;
+    
+    try {
+        const response = await fetch(`/api/team/members?team=${currentTeam}`);
+        const members = await response.json();
+        
+        assigneeSelect.innerHTML = '<option value="">Select Assignee</option>';
+        members.forEach(member => {
+            const option = document.createElement('option');
+            option.value = member;
+            option.textContent = member;
+            assigneeSelect.appendChild(option);
+        });
+    } catch (err) {
+        console.error('Failed to fetch team members:', err);
+    }
+}
+
 // Generate Avatar URL based on name
 function getAvatar(name) {
     const colors = {
@@ -277,11 +298,13 @@ async function renderMessages() {
     if (!chatMessages) return;
     
     try {
-        let url = `/api/messages?user=${currentUser}`;
+        let url = `/api/messages?user=${encodeURIComponent(currentUser)}`;
         if (currentRecipient) {
-            url += `&recipient=${currentRecipient}`;
+            url += `&recipient=${encodeURIComponent(currentRecipient)}`;
+        } else if (currentChannel) {
+            url += `&channel=${encodeURIComponent(currentChannel)}`;
         } else {
-            url += `&channel=${currentChannel}`;
+            return; // Neither channel nor recipient selected
         }
         
         const response = await fetch(url);
@@ -325,11 +348,11 @@ async function renderMessages() {
         });
         
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        renderMessagingSidebar();
     } catch (err) {
         console.error('Failed to fetch messages:', err);
     }
 }
+
 
 async function renderMessagingSidebar() {
     if (!channelList || !dmList) return;
@@ -478,25 +501,21 @@ function handleDrop(e) {
 }
 
 // Modal Logic
-function openModal() {
+async function openModal() {
     taskModal.classList.add('active');
     document.getElementById('taskTitle').focus();
     
-    // Set default assignee to current user
+    // Fetch and restrict assignees to current team members
+    await updateAssigneeDropdown();
+    
+    // Set default assignee to current user if they are in the team
     const assigneeSelect = document.getElementById('taskAssignee');
-    let optionExists = false;
-    for(let i=0; i<assigneeSelect.options.length; i++) {
-        if(assigneeSelect.options[i].value === currentUser) {
-            optionExists = true;
-            break;
-        }
-    }
-    if (!optionExists && currentUser) {
-        const newOption = new Option(currentUser, currentUser);
-        assigneeSelect.add(newOption);
-    }
     if (currentUser) {
-        assigneeSelect.value = currentUser;
+        // Check if currentUser is an option
+        const exists = Array.from(assigneeSelect.options).some(opt => opt.value === currentUser);
+        if (exists) {
+            assigneeSelect.value = currentUser;
+        }
     }
 }
 
@@ -584,6 +603,7 @@ if (teamSelect) {
     teamSelect.addEventListener('change', async (e) => {
         currentTeam = e.target.value;
         fetchTasks();
+        updateAssigneeDropdown();
     });
 }
 
@@ -694,6 +714,7 @@ function checkAuth() {
         renderTeamSelect();
         initBoard();
         setupChannelListeners();
+        renderMessagingSidebar();
         
         // Start polling for messages if we're on the messages view
         startMessagePolling();
